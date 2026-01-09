@@ -23,7 +23,7 @@ import {
   Bell,
   RotateCcw,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./EnquiryList.css";
 import { enquiryAPI } from "../../../services/api";
 
@@ -62,6 +62,7 @@ const EnquiryList = () => {
 
   // State for dropdown menu
   const [openDropdown, setOpenDropdown] = useState(null);
+  const navigate = useNavigate();
 
   // Status options
   const statusOptions = [
@@ -86,12 +87,24 @@ const EnquiryList = () => {
     "other",
   ];
 
-  // Fetch enquiries from backend
+  // Get auth token from localStorage
+  const getAuthToken = () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    return user?.token || "";
+  };
+
+  // Fetch enquiries from backend - FIXED
   const fetchEnquiries = async () => {
     setLoading(true);
     setError(null);
 
     try {
+      // Get auth token
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication required. Please login again.");
+      }
+
       // Prepare API params
       const params = {
         page: pagination.page,
@@ -106,29 +119,49 @@ const EnquiryList = () => {
       if (sortConfig.key) params.sortBy = sortConfig.key;
       if (sortConfig.direction) params.sortOrder = sortConfig.direction;
 
-      const response = await enquiryAPI.getEnquiries(params);
+      console.log("Fetching enquiries with params:", params);
+      const response = await enquiryAPI.getEnquiries(params, token);
 
       if (response.data.success) {
-        setEnquiries(response.data.data || []);
-        setFilteredEnquiries(response.data.data || []);
+        const enquiryData = response.data.data || response.data.enquiries || [];
+        setEnquiries(enquiryData);
+        setFilteredEnquiries(enquiryData);
 
         // Update pagination
         setPagination({
           ...pagination,
-          total: response.data.total,
-          totalPages: response.data.totalPages,
+          total: response.data.total || enquiryData.length,
+          totalPages:
+            response.data.totalPages ||
+            Math.ceil(
+              (response.data.total || enquiryData.length) / pagination.limit
+            ),
         });
 
         // Calculate stats
-        calculateStats(response.data.data || []);
+        calculateStats(enquiryData);
       } else {
         throw new Error(response.data.message || "Failed to fetch enquiries");
       }
     } catch (err) {
       console.error("Error fetching enquiries:", err);
-      setError(
-        err.response?.data?.message || err.message || "Failed to load enquiries"
-      );
+
+      // Handle unauthorized error
+      if (err.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
+      } else {
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Failed to load enquiries"
+        );
+      }
+
       setEnquiries([]);
       setFilteredEnquiries([]);
     } finally {
@@ -216,32 +249,32 @@ const EnquiryList = () => {
   const getStatusBadge = (status) => {
     const statusMap = {
       new: {
-        color: "bg-blue-100 text-blue-800",
+        color: "badge-blue",
         label: "New",
         icon: <Clock size={12} />,
       },
       contacted: {
-        color: "bg-yellow-100 text-yellow-800",
+        color: "badge-yellow",
         label: "Contacted",
         icon: <Phone size={12} />,
       },
       follow_up: {
-        color: "bg-orange-100 text-orange-800",
+        color: "badge-orange",
         label: "Follow Up",
         icon: <Bell size={12} />,
       },
       converted: {
-        color: "bg-green-100 text-green-800",
+        color: "badge-green",
         label: "Converted",
         icon: <CheckCircle size={12} />,
       },
       rejected: {
-        color: "bg-red-100 text-red-800",
+        color: "badge-red",
         label: "Rejected",
         icon: <XCircle size={12} />,
       },
       lost: {
-        color: "bg-gray-100 text-gray-800",
+        color: "badge-gray",
         label: "Lost",
         icon: <XCircle size={12} />,
       },
@@ -259,9 +292,18 @@ const EnquiryList = () => {
   const updateEnquiryStatus = async (enquiryId, newStatus) => {
     try {
       setLoading(true);
-      const response = await enquiryAPI.updateEnquiryStatus(enquiryId, {
-        status: newStatus,
-      });
+      const token = getAuthToken();
+      if (!token) {
+        alert("Authentication required. Please login again.");
+        navigate("/login");
+        return;
+      }
+
+      const response = await enquiryAPI.updateEnquiryStatus(
+        enquiryId,
+        { status: newStatus },
+        token
+      );
 
       if (response.data.success) {
         alert(`Status updated to ${newStatus.replace("_", " ")} successfully!`);
@@ -298,67 +340,38 @@ const EnquiryList = () => {
     }
   };
 
-  // UPDATED: Handle Convert to Admission - Include father number and DOB
-  // UPDATED: Handle Convert to Admission - Include father number and DOB
+  // Handle Convert to Admission
   const handleConvertToAdmission = (enquiry) => {
-    // Store enquiry data with father's number and DOB
+    // Store enquiry data
     const enquiryData = {
       _id: enquiry._id,
       enquiryNo: enquiry.enquiryNo,
-
-      // Personal Information
       applicantName: enquiry.applicantName || "",
-      fatherName: enquiry.guardianName || "", // Guardian name as father's name
-      dateOfBirth: enquiry.dateOfBirth || "", // Include DOB
+      fatherName: enquiry.guardianName || "",
+      dateOfBirth: enquiry.dateOfBirth || "",
       gender: enquiry.gender || "",
-
-      // Contact Information - Include father's number
       contactNo: enquiry.contactNo || "",
-      fatherNumber: enquiry.guardianContact || enquiry.whatsappNo || "", // Use guardianContact or whatsappNo
+      fatherNumber: enquiry.guardianContact || enquiry.whatsappNo || "",
       email: enquiry.email || "",
-
-      // Address Information
-      address: enquiry.place || "",
+      address: enquiry.address || enquiry.place || "",
       place: enquiry.place || "",
       city: enquiry.city || "",
       state: enquiry.state || "",
-
-      // Academic Information
       qualification: enquiry.qualification || "",
       yearOfPassing: enquiry.yearOfPassing || "",
-
-      // Course Information
       courseInterested: enquiry.courseInterested || "",
       batchTime: enquiry.batchTime || "",
-
-      // Reference
       reference: enquiry.reference || "",
-
-      // Other
       enquiryMethod: enquiry.enquiryMethod || "",
       enquiryBy: enquiry.enquiryBy || "",
-      remark: enquiry.remark || "", // Correct field name from your enquiry model
+      remark: enquiry.remark || enquiry.remarks || "",
     };
-
-    // ✅ ADD DEBUG LOGS HERE:
-    console.log("🔍 DEBUG: Enquiry data being saved to localStorage:");
-    console.log("Place from enquiry:", enquiry.place);
-    console.log("State from enquiry:", enquiry.state);
-    console.log("Qualification from enquiry:", enquiry.qualification);
-    console.log("Full enquiryData object:", enquiryData);
 
     // Save to localStorage
     localStorage.setItem("enquiryData", JSON.stringify(enquiryData));
 
-    // ✅ VERIFY THE SAVE:
-    const savedData = localStorage.getItem("enquiryData");
-    console.log(
-      "🔍 DEBUG: Data retrieved from localStorage:",
-      JSON.parse(savedData)
-    );
-
     // Redirect to AddAdmission page
-    window.location.href = `/admin/front-office/admissions/add?fromEnquiry=true`;
+    navigate("/admin/front-office/admissions/add?fromEnquiry=true");
   };
 
   const handleDeleteEnquiry = async (id) => {
@@ -366,7 +379,14 @@ const EnquiryList = () => {
       return;
 
     try {
-      const response = await enquiryAPI.deleteEnquiry(id);
+      const token = getAuthToken();
+      if (!token) {
+        alert("Authentication required. Please login again.");
+        navigate("/login");
+        return;
+      }
+
+      const response = await enquiryAPI.deleteEnquiry(id, token);
       if (response.data.success) {
         alert("Enquiry deleted successfully!");
         fetchEnquiries(); // Refresh the list
@@ -400,15 +420,14 @@ const EnquiryList = () => {
       return;
     }
 
-    // Clean the phone number (remove any non-digit characters)
+    // Clean the phone number
     const cleanNumber = phoneNumber.replace(/\D/g, "");
-
-    // Open WhatsApp with the number
     window.open(`https://wa.me/${cleanNumber}`, "_blank");
   };
 
   // Toggle dropdown menu
-  const toggleDropdown = (id) => {
+  const toggleDropdown = (id, e) => {
+    e.stopPropagation();
     setOpenDropdown(openDropdown === id ? null : id);
   };
 
@@ -474,7 +493,7 @@ const EnquiryList = () => {
       {!loading && !error && (
         <div className="stats-cards">
           <div className="stat-card">
-            <div className="stat-icon bg-blue-100 text-blue-600">
+            <div className="stat-icon stat-icon-blue">
               <UserPlus size={24} />
             </div>
             <div>
@@ -483,7 +502,7 @@ const EnquiryList = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon bg-green-100 text-green-600">
+            <div className="stat-icon stat-icon-green">
               <CheckCircle size={24} />
             </div>
             <div>
@@ -492,7 +511,7 @@ const EnquiryList = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon bg-orange-100 text-orange-600">
+            <div className="stat-icon stat-icon-orange">
               <Bell size={24} />
             </div>
             <div>
@@ -501,7 +520,7 @@ const EnquiryList = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon bg-blue-100 text-blue-600">
+            <div className="stat-icon stat-icon-blue">
               <Clock size={24} />
             </div>
             <div>
@@ -510,7 +529,7 @@ const EnquiryList = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon bg-red-100 text-red-600">
+            <div className="stat-icon stat-icon-red">
               <XCircle size={24} />
             </div>
             <div>
@@ -525,7 +544,7 @@ const EnquiryList = () => {
       {!loading && !error && (
         <>
           <div className="filters-section">
-            {/* Left side - Date Range */}
+            {/* Date Range Filter */}
             <div className="date-filter-section">
               <button
                 className="date-filter-toggle"
@@ -610,7 +629,7 @@ const EnquiryList = () => {
               )}
             </div>
 
-            {/* Right side - Search and other filters */}
+            {/* Search and other filters */}
             <div className="search-filter-section">
               <div className="search-box">
                 <Search size={20} />
@@ -703,7 +722,9 @@ const EnquiryList = () => {
                 {filteredEnquiries.length > 0 ? (
                   filteredEnquiries.map((enquiry) => (
                     <tr key={enquiry._id}>
-                      <td className="enquiry-id">{enquiry.enquiryNo}</td>
+                      <td className="enquiry-id">
+                        {enquiry.enquiryNo || "N/A"}
+                      </td>
                       <td>
                         <div className="student-info">
                           <div className="avatar">
@@ -748,7 +769,11 @@ const EnquiryList = () => {
                         <div className="date-info">
                           <div>
                             <Calendar size={14} />{" "}
-                            {new Date(enquiry.enquiryDate).toLocaleDateString()}
+                            {enquiry.enquiryDate
+                              ? new Date(
+                                  enquiry.enquiryDate
+                                ).toLocaleDateString()
+                              : "N/A"}
                           </div>
                           {enquiry.followUpDate && (
                             <div className="follow-up-date">
@@ -766,8 +791,10 @@ const EnquiryList = () => {
                             <CheckCircle size={14} />
                             <span>₹{enquiry.prospectusAmount || 0}</span>
                           </div>
-                        ) : (
+                        ) : enquiry.prospectusFees === "no" ? (
                           <span className="prospectus-not-paid">Not Paid</span>
+                        ) : (
+                          <span className="prospectus-na">N/A</span>
                         )}
                       </td>
                       <td>
@@ -837,24 +864,20 @@ const EnquiryList = () => {
                           <div className="dropdown-container">
                             <button
                               className="action-btn more"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleDropdown(enquiry._id);
-                              }}
+                              onClick={(e) => toggleDropdown(enquiry._id, e)}
                               title="More options"
                             >
                               <MoreVertical size={16} />
                             </button>
 
                             {openDropdown === enquiry._id && (
-                              <div
-                                className="dropdown-menu"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                              <div className="dropdown-menu">
                                 <button
                                   className="dropdown-item"
                                   onClick={() => {
-                                    window.location.href = `/admin/front-office/enquiries/edit/${enquiry._id}`;
+                                    navigate(
+                                      `/admin/front-office/enquiries/edit/${enquiry._id}`
+                                    );
                                   }}
                                 >
                                   <Edit size={14} />
@@ -909,30 +932,28 @@ const EnquiryList = () => {
           </div>
 
           {/* Pagination */}
-          <div className="enquiry-pagination">
-            <div className="enquiry-pagination-info">
+          <div className="pagination">
+            <div className="pagination-info">
               Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
               {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
               of {pagination.total} enquiries
             </div>
-            <div className="enquiry-pagination-controls">
+            <div className="pagination-controls">
               <button
-                className="enquiry-pagination-btn prev"
+                className="pagination-btn prev"
                 onClick={() => handlePageChange(pagination.page - 1)}
                 disabled={pagination.page === 1 || loading}
               >
                 Previous
               </button>
 
-              <div className="enquiry-page-number">
-                <span className="enquiry-current-page">{pagination.page}</span>
-                <span className="enquiry-total-pages">
-                  of {pagination.totalPages}
-                </span>
+              <div className="page-number">
+                <span className="current-page">{pagination.page}</span>
+                <span className="total-pages">of {pagination.totalPages}</span>
               </div>
 
               <button
-                className="enquiry-pagination-btn next"
+                className="pagination-btn next"
                 onClick={() => handlePageChange(pagination.page + 1)}
                 disabled={pagination.page >= pagination.totalPages || loading}
               >

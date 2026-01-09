@@ -1,6 +1,5 @@
 // pages/frontoffice/admission/AdmissionList.jsx
 import React, { useState, useEffect } from "react";
-import { facultyAPI } from "../../../services/api";
 import {
   Search,
   Filter,
@@ -17,6 +16,7 @@ import {
   CalendarDays,
   MessageCircle,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "./AdmissionList.css";
@@ -49,8 +49,12 @@ const AdmissionList = () => {
     totalPages: 1,
   });
 
-  const [facultyMembers, setFacultyMembers] = useState([]);
-  const [loadingFaculty, setLoadingFaculty] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    facultyAllotted: 0,
+    differentCourses: 0,
+    activeStudents: 0,
+  });
 
   // Course options
   const courseOptions = [
@@ -85,14 +89,6 @@ const AdmissionList = () => {
     "Not Allotted",
   ];
 
-  // Field mapping for sorting
-  const fieldMapping = {
-    studentId: "admissionNo",
-    name: "fullName",
-    course: "course",
-    admissionDate: "admissionDate",
-  };
-
   // Fetch admissions from backend
   useEffect(() => {
     const fetchAdmissions = async () => {
@@ -115,39 +111,61 @@ const AdmissionList = () => {
         if (dateRange.startDate) params.startDate = dateRange.startDate;
         if (dateRange.endDate) params.endDate = dateRange.endDate;
 
-        // Send mapped field name to backend
-        const backendSortField = fieldMapping[sortConfig.key] || sortConfig.key;
-        if (backendSortField) params.sortBy = backendSortField;
+        if (sortConfig.key) params.sortBy = sortConfig.key;
         if (sortConfig.direction) params.sortOrder = sortConfig.direction;
-
-        console.log("API Params:", params); // Debug log
 
         const response = await admissionAPI.getAdmissions(params);
 
         if (response.data.success) {
-          const transformedAdmissions = response.data.data.map((admission) => ({
+          const admissionData = response.data.data || [];
+          const transformedAdmissions = admissionData.map((admission) => ({
             id: admission._id,
             studentId:
               admission.admissionNo || `ADM${admission._id.substring(0, 8)}`,
-            name: admission.fullName || admission.applicantName,
-            mobileNumber: admission.mobileNumber || admission.contactNo,
-            whatsappNumber: admission.mobileNumber || admission.contactNo,
-            course: admission.course || admission.courseInterested,
+            name: admission.fullName || admission.applicantName || "N/A",
+            mobileNumber:
+              admission.mobileNumber || admission.contactNo || "N/A",
+            whatsappNumber:
+              admission.mobileNumber || admission.contactNo || "N/A",
+            course: admission.course || admission.courseInterested || "N/A",
             admissionDate: admission.admissionDate || admission.createdAt,
             batch: admission.batchTime || admission.batch || "Not specified",
             facultyAllot: admission.facultyAllot || "Not Allotted",
             aadharNumber: admission.aadharNumber || "Not provided",
             admissionStatus: admission.status || "confirmed",
-            email: admission.email,
+            email: admission.email || "N/A",
           }));
 
           setAdmissions(transformedAdmissions);
           setFilteredAdmissions(transformedAdmissions);
 
+          // Calculate stats
+          const total = transformedAdmissions.length;
+          const facultyAllotted = transformedAdmissions.filter(
+            (a) => a.facultyAllot !== "Not Allotted"
+          ).length;
+          const differentCourses = new Set(
+            transformedAdmissions.map((a) => a.course)
+          ).size;
+          const activeStudents = transformedAdmissions.filter(
+            (a) =>
+              a.admissionStatus === "admitted" ||
+              a.admissionStatus === "confirmed"
+          ).length;
+
+          setStats({
+            total,
+            facultyAllotted,
+            differentCourses,
+            activeStudents,
+          });
+
           setPagination({
             ...pagination,
-            total: response.data.total,
-            totalPages: response.data.totalPages,
+            total: response.data.total || total,
+            totalPages:
+              response.data.totalPages ||
+              Math.ceil((response.data.total || total) / pagination.limit),
           });
 
           setError(null);
@@ -177,8 +195,7 @@ const AdmissionList = () => {
     selectedBatch,
     selectedFaculty,
     dateRange,
-    sortConfig.key,
-    sortConfig.direction,
+    sortConfig,
   ]);
 
   // Local filtering for search
@@ -200,12 +217,11 @@ const AdmissionList = () => {
     setFilteredAdmissions(filtered);
   }, [searchTerm, admissions]);
 
-  const handleSort = (frontendKey) => {
-    // Use frontend key for comparison, but map when sending to backend
+  const handleSort = (key) => {
     setSortConfig({
-      key: frontendKey,
+      key,
       direction:
-        sortConfig.key === frontendKey && sortConfig.direction === "asc"
+        sortConfig.key === key && sortConfig.direction === "asc"
           ? "desc"
           : "asc",
     });
@@ -220,11 +236,7 @@ const AdmissionList = () => {
   };
 
   const clearDateFilter = () => {
-    setDateRange({
-      startDate: "",
-      endDate: "",
-    });
-    setPagination({ ...pagination, page: 1 });
+    setDateRange({ startDate: "", endDate: "" });
   };
 
   const applyThisMonthFilter = () => {
@@ -236,71 +248,88 @@ const AdmissionList = () => {
       startDate: firstDay.toISOString().split("T")[0],
       endDate: lastDay.toISOString().split("T")[0],
     });
-    setPagination({ ...pagination, page: 1 });
   };
 
   const applyTodayFilter = () => {
     const today = new Date().toISOString().split("T")[0];
-    setDateRange({
-      startDate: today,
-      endDate: today,
-    });
-    setPagination({ ...pagination, page: 1 });
-  };
-
-  const handleFilterChange = (filterType, value) => {
-    // Reset to page 1 when any filter changes
-    setPagination({ ...pagination, page: 1 });
-
-    switch (filterType) {
-      case "course":
-        setSelectedCourse(value);
-        break;
-      case "batch":
-        setSelectedBatch(value);
-        break;
-      case "faculty":
-        setSelectedFaculty(value);
-        break;
-      default:
-        break;
-    }
+    setDateRange({ startDate: today, endDate: today });
   };
 
   const getAdmissionStatusBadge = (status) => {
     const statusMap = {
-      confirmed: { color: "bg-green-100 text-green-800", label: "Confirmed" },
-      admitted: { color: "bg-green-100 text-green-800", label: "Admitted" },
-      pending: { color: "bg-yellow-100 text-yellow-800", label: "Pending" },
-      provisional: { color: "bg-blue-100 text-blue-800", label: "Provisional" },
-      cancelled: { color: "bg-red-100 text-red-800", label: "Cancelled" },
-      completed: { color: "bg-gray-100 text-gray-800", label: "Completed" },
-      new: { color: "bg-blue-100 text-blue-800", label: "New" },
-      under_process: {
-        color: "bg-yellow-100 text-yellow-800",
-        label: "Under Process",
+      confirmed: {
+        color: "adm-badge-green",
+        label: "Confirmed",
+        icon: <CheckCircle size={12} />,
       },
-      approved: { color: "bg-green-100 text-green-800", label: "Approved" },
-      rejected: { color: "bg-red-100 text-red-800", label: "Rejected" },
+      admitted: {
+        color: "adm-badge-green",
+        label: "Admitted",
+        icon: <CheckCircle size={12} />,
+      },
+      pending: {
+        color: "adm-badge-yellow",
+        label: "Pending",
+        icon: <CheckCircle size={12} />,
+      },
+      provisional: {
+        color: "adm-badge-blue",
+        label: "Provisional",
+        icon: <CheckCircle size={12} />,
+      },
+      cancelled: {
+        color: "adm-badge-red",
+        label: "Cancelled",
+        icon: <CheckCircle size={12} />,
+      },
+      completed: {
+        color: "adm-badge-gray",
+        label: "Completed",
+        icon: <CheckCircle size={12} />,
+      },
+      new: {
+        color: "adm-badge-blue",
+        label: "New",
+        icon: <CheckCircle size={12} />,
+      },
+      under_process: {
+        color: "adm-badge-yellow",
+        label: "Under Process",
+        icon: <CheckCircle size={12} />,
+      },
+      approved: {
+        color: "adm-badge-green",
+        label: "Approved",
+        icon: <CheckCircle size={12} />,
+      },
+      rejected: {
+        color: "adm-badge-red",
+        label: "Rejected",
+        icon: <CheckCircle size={12} />,
+      },
     };
 
     const config = statusMap[status] || statusMap.confirmed;
     return (
-      <span className={`admission-status-badge ${config.color}`}>
-        <CheckCircle size={12} />
+      <span className={`adm-status-badge ${config.color}`}>
+        {config.icon}
         {config.label}
       </span>
     );
   };
 
   const openWhatsApp = (phoneNumber) => {
-    if (!phoneNumber) {
+    if (!phoneNumber || phoneNumber === "N/A") {
       alert("No WhatsApp number available");
       return;
     }
 
     const cleanNumber = phoneNumber.replace(/\D/g, "");
-    window.open(`https://wa.me/${cleanNumber}`, "_blank");
+    if (cleanNumber.length >= 10) {
+      window.open(`https://wa.me/${cleanNumber}`, "_blank");
+    } else {
+      alert("Invalid phone number");
+    }
   };
 
   const handleDeleteAdmission = async (id, name) => {
@@ -309,31 +338,24 @@ const AdmissionList = () => {
     ) {
       try {
         const response = await admissionAPI.deleteAdmission(id);
-
         if (response.data.success) {
           alert("Admission deleted successfully!");
-
-          setAdmissions(admissions.filter((admission) => admission.id !== id));
-          setFilteredAdmissions(
-            filteredAdmissions.filter((admission) => admission.id !== id)
+          // Refresh the list
+          const newAdmissions = admissions.filter(
+            (admission) => admission.id !== id
           );
-        } else {
-          throw new Error(
-            response.data.message || "Failed to delete admission"
-          );
+          setAdmissions(newAdmissions);
+          setFilteredAdmissions(newAdmissions);
         }
       } catch (err) {
         console.error("Error deleting admission:", err);
-        alert(
-          err.response?.data?.message ||
-            err.message ||
-            "Failed to delete admission"
-        );
+        alert(err.response?.data?.message || "Failed to delete admission");
       }
     }
   };
 
-  const toggleDropdown = (id) => {
+  const toggleDropdown = (id, e) => {
+    e.stopPropagation();
     setOpenDropdown(openDropdown === id ? null : id);
   };
 
@@ -341,17 +363,17 @@ const AdmissionList = () => {
     const handleClickOutside = () => {
       setOpenDropdown(null);
     };
-
     document.addEventListener("click", handleClickOutside);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-    };
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
   const formatDate = (dateString) => {
-    if (!dateString || dateString === "N/A") return "N/A";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-GB");
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString("en-GB");
+    } catch (e) {
+      return "Invalid Date";
+    }
   };
 
   const handlePageChange = (newPage) => {
@@ -364,24 +386,28 @@ const AdmissionList = () => {
     alert("Export feature coming soon!");
   };
 
-  // Get unique frontend key for sort indicator
-  const getSortIndicator = (frontendKey) => {
-    if (sortConfig.key === frontendKey) {
-      return sortConfig.direction === "asc" ? "↑" : "↓";
-    }
-    return "";
+  const handleRefresh = () => {
+    setPagination({ ...pagination, page: 1 });
   };
 
   return (
-    <div className="admission-list-container">
+    <div className="adm-list-container">
       {/* Header */}
-      <div className="page-header">
+      <div className="adm-header">
         <div>
           <h1>Admission List</h1>
           <p>View all student admissions converted from enquiries</p>
         </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={handleExport}>
+        <div className="adm-header-actions">
+          <button
+            onClick={handleRefresh}
+            className="adm-btn-secondary"
+            disabled={loading}
+          >
+            <RefreshCw size={18} className={loading ? "adm-spinning" : ""} />
+            Refresh
+          </button>
+          <button className="adm-btn-secondary" onClick={handleExport}>
             <Download size={18} />
             Export List
           </button>
@@ -390,24 +416,21 @@ const AdmissionList = () => {
 
       {/* Loading State */}
       {loading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner"></div>
+        <div className="adm-loading-overlay">
+          <div className="adm-loading-spinner"></div>
           <p>Loading admissions...</p>
         </div>
       )}
 
       {/* Error State */}
       {error && !loading && (
-        <div className="error-alert">
+        <div className="adm-error-alert">
           <AlertCircle size={20} />
           <div>
             <strong>Error loading admissions:</strong>
             <p>{error}</p>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="btn-retry"
-          >
+          <button onClick={handleRefresh} className="adm-btn-retry">
             Retry
           </button>
         </div>
@@ -415,53 +438,40 @@ const AdmissionList = () => {
 
       {/* Stats Cards */}
       {!loading && !error && (
-        <div className="stats-cards">
-          <div className="stat-card">
-            <div className="stat-icon bg-blue-100 text-blue-600">
+        <div className="adm-stats-cards">
+          <div className="adm-stat-card">
+            <div className="adm-stat-icon adm-stat-icon-blue">
               <UserCheck size={24} />
             </div>
             <div>
-              <h3>{admissions.length}</h3>
+              <h3>{stats.total}</h3>
               <p>Total Admissions</p>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-green-100 text-green-600">
+          <div className="adm-stat-card">
+            <div className="adm-stat-icon adm-stat-icon-green">
               <CheckCircle size={24} />
             </div>
             <div>
-              <h3>
-                {
-                  admissions.filter((a) => a.facultyAllot !== "Not Allotted")
-                    .length
-                }
-              </h3>
+              <h3>{stats.facultyAllotted}</h3>
               <p>Faculty Allotted</p>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-purple-100 text-purple-600">
+          <div className="adm-stat-card">
+            <div className="adm-stat-icon adm-stat-icon-purple">
               <Calendar size={24} />
             </div>
             <div>
-              <h3>{new Set(admissions.map((a) => a.course)).size}</h3>
+              <h3>{stats.differentCourses}</h3>
               <p>Different Courses</p>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-orange-100 text-orange-600">
+          <div className="adm-stat-card">
+            <div className="adm-stat-icon adm-stat-icon-orange">
               <UserCheck size={24} />
             </div>
             <div>
-              <h3>
-                {
-                  admissions.filter(
-                    (a) =>
-                      a.admissionStatus === "admitted" ||
-                      a.admissionStatus === "confirmed"
-                  ).length
-                }
-              </h3>
+              <h3>{stats.activeStudents}</h3>
               <p>Active Students</p>
             </div>
           </div>
@@ -470,26 +480,24 @@ const AdmissionList = () => {
 
       {/* Filters Section */}
       {!loading && !error && (
-        <div className="filters-section-horizontal">
+        <div className="adm-filters-section">
           {/* Search Box */}
-          <div className="search-box-horizontal">
+          <div className="adm-search-box">
             <Search size={20} />
             <input
               type="text"
               placeholder="Search by name, student ID, phone, or Aadhar..."
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPagination({ ...pagination, page: 1 });
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleRefresh()}
               disabled={loading}
             />
           </div>
 
           {/* Date Range Filter */}
-          <div className="date-filter-section-horizontal">
+          <div className="adm-date-filter-section">
             <button
-              className="date-filter-toggle-horizontal"
+              className="adm-date-filter-toggle"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowDateFilter(!showDateFilter);
@@ -510,21 +518,21 @@ const AdmissionList = () => {
 
             {showDateFilter && (
               <div
-                className="date-filter-dropdown-horizontal"
+                className="adm-date-filter-dropdown"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="date-filter-header">
+                <div className="adm-date-filter-header">
                   <h4>Filter by Admission Date</h4>
                   <button
-                    className="close-btn"
+                    className="adm-close-btn"
                     onClick={() => setShowDateFilter(false)}
                   >
                     ×
                   </button>
                 </div>
 
-                <div className="date-range-inputs">
-                  <div className="date-input-group">
+                <div className="adm-date-range-inputs">
+                  <div className="adm-date-input-group">
                     <label>From Date</label>
                     <input
                       type="date"
@@ -538,7 +546,7 @@ const AdmissionList = () => {
                     />
                   </div>
 
-                  <div className="date-input-group">
+                  <div className="adm-date-input-group">
                     <label>To Date</label>
                     <input
                       type="date"
@@ -551,19 +559,22 @@ const AdmissionList = () => {
                   </div>
                 </div>
 
-                <div className="quick-date-buttons">
-                  <button onClick={applyTodayFilter} className="quick-date-btn">
+                <div className="adm-quick-date-buttons">
+                  <button
+                    onClick={applyTodayFilter}
+                    className="adm-quick-date-btn"
+                  >
                     Today
                   </button>
                   <button
                     onClick={applyThisMonthFilter}
-                    className="quick-date-btn"
+                    className="adm-quick-date-btn"
                   >
                     This Month
                   </button>
                   <button
                     onClick={clearDateFilter}
-                    className="quick-date-btn clear"
+                    className="adm-quick-date-btn adm-clear"
                   >
                     Clear
                   </button>
@@ -573,11 +584,11 @@ const AdmissionList = () => {
           </div>
 
           {/* Course Filter */}
-          <div className="filter-select-horizontal">
+          <div className="adm-filter-select">
             <Filter size={16} />
             <select
               value={selectedCourse}
-              onChange={(e) => handleFilterChange("course", e.target.value)}
+              onChange={(e) => setSelectedCourse(e.target.value)}
               disabled={loading}
             >
               {courseOptions.map((course) => (
@@ -592,10 +603,10 @@ const AdmissionList = () => {
           </div>
 
           {/* Batch Filter */}
-          <div className="filter-select-horizontal">
+          <div className="adm-filter-select">
             <select
               value={selectedBatch}
-              onChange={(e) => handleFilterChange("batch", e.target.value)}
+              onChange={(e) => setSelectedBatch(e.target.value)}
               disabled={loading}
             >
               {batchOptions.map((batch) => (
@@ -610,10 +621,10 @@ const AdmissionList = () => {
           </div>
 
           {/* Faculty Filter */}
-          <div className="filter-select-horizontal">
+          <div className="adm-filter-select">
             <select
               value={selectedFaculty}
-              onChange={(e) => handleFilterChange("faculty", e.target.value)}
+              onChange={(e) => setSelectedFaculty(e.target.value)}
               disabled={loading}
             >
               {facultyOptions.map((faculty) => (
@@ -630,25 +641,39 @@ const AdmissionList = () => {
       )}
 
       {/* Table */}
-      <div className="table-container">
-        <table className="data-table">
+      <div className="adm-table-container">
+        <table className="adm-data-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort("studentId")} className="sortable">
-                Student ID {getSortIndicator("studentId")}
+              <th
+                onClick={() => handleSort("admissionNo")}
+                className="adm-sortable"
+              >
+                Student ID{" "}
+                {sortConfig.key === "admissionNo" &&
+                  (sortConfig.direction === "asc" ? "↑" : "↓")}
               </th>
-              <th onClick={() => handleSort("name")} className="sortable">
-                Student Name {getSortIndicator("name")}
+              <th
+                onClick={() => handleSort("fullName")}
+                className="adm-sortable"
+              >
+                Student Name{" "}
+                {sortConfig.key === "fullName" &&
+                  (sortConfig.direction === "asc" ? "↑" : "↓")}
               </th>
               <th>Contact Info</th>
-              <th onClick={() => handleSort("course")} className="sortable">
-                Course {getSortIndicator("course")}
+              <th onClick={() => handleSort("course")} className="adm-sortable">
+                Course{" "}
+                {sortConfig.key === "course" &&
+                  (sortConfig.direction === "asc" ? "↑" : "↓")}
               </th>
               <th
                 onClick={() => handleSort("admissionDate")}
-                className="sortable"
+                className="adm-sortable"
               >
-                Admission Date {getSortIndicator("admissionDate")}
+                Admission Date{" "}
+                {sortConfig.key === "admissionDate" &&
+                  (sortConfig.direction === "asc" ? "↑" : "↓")}
               </th>
               <th>Batch</th>
               <th>Faculty Allot</th>
@@ -660,46 +685,47 @@ const AdmissionList = () => {
             {!loading && !error && filteredAdmissions.length > 0 ? (
               filteredAdmissions.map((admission) => (
                 <tr key={admission.id}>
-                  <td className="student-id">{admission.studentId}</td>
+                  <td className="adm-student-id">{admission.studentId}</td>
                   <td>
-                    <div className="student-info">
-                      <div className="avatar">
-                        {admission.name ? admission.name.charAt(0) : "?"}
+                    <div className="adm-student-info">
+                      <div className="adm-avatar">
+                        {admission.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <strong>{admission.name || "N/A"}</strong>
+                        <strong>{admission.name}</strong>
                         <small>Aadhar: {admission.aadharNumber}</small>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <div className="contact-info">
+                    <div className="adm-contact-info">
                       <div>
-                        <Phone size={14} /> {admission.mobileNumber || "N/A"}
+                        <Phone size={14} /> {admission.mobileNumber}
                       </div>
                       <div>
-                        <MessageCircle size={14} className="whatsapp-icon" />
-                        {admission.whatsappNumber ||
-                          admission.mobileNumber ||
-                          "N/A"}
+                        <MessageCircle
+                          size={14}
+                          className="adm-whatsapp-icon"
+                        />
+                        {admission.whatsappNumber}
                       </div>
                     </div>
                   </td>
-                  <td>{admission.course || "N/A"}</td>
+                  <td>{admission.course}</td>
                   <td>
-                    <div className="date-info">
+                    <div className="adm-date-info">
                       <Calendar size={14} />
                       {formatDate(admission.admissionDate)}
                     </div>
                   </td>
                   <td>
-                    <span className="batch-badge">{admission.batch}</span>
+                    <span className="adm-batch-badge">{admission.batch}</span>
                   </td>
                   <td>
                     <span
-                      className={`faculty-badge ${
+                      className={`adm-faculty-badge ${
                         admission.facultyAllot === "Not Allotted"
-                          ? "not-allotted"
+                          ? "adm-not-allotted"
                           : ""
                       }`}
                     >
@@ -708,53 +734,44 @@ const AdmissionList = () => {
                   </td>
                   <td>{getAdmissionStatusBadge(admission.admissionStatus)}</td>
                   <td>
-                    <div className="action-buttons">
+                    <div className="adm-action-buttons">
                       <Link
                         to={`/admin/front-office/admissions/view/${admission.id}`}
-                        className="action-btn view"
+                        className="adm-action-btn adm-view"
                         title="View Admission"
                       >
                         <Eye size={16} />
                       </Link>
 
-                      <div className="dropdown-container">
+                      <div className="adm-dropdown-container">
                         <button
-                          className="action-btn more"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleDropdown(admission.id);
-                          }}
+                          className="adm-action-btn adm-more"
+                          onClick={(e) => toggleDropdown(admission.id, e)}
                           title="More options"
                         >
                           <MoreVertical size={16} />
                         </button>
 
                         {openDropdown === admission.id && (
-                          <div
-                            className="dropdown-menu"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          <div className="adm-dropdown-menu">
                             <Link
                               to={`/admin/front-office/admissions/edit/${admission.id}`}
-                              className="dropdown-item"
+                              className="adm-dropdown-item"
                             >
                               <Edit size={14} />
                               <span>Edit Admission</span>
                             </Link>
                             <button
-                              className="dropdown-item"
+                              className="adm-dropdown-item"
                               onClick={() =>
-                                openWhatsApp(
-                                  admission.whatsappNumber ||
-                                    admission.mobileNumber
-                                )
+                                openWhatsApp(admission.whatsappNumber)
                               }
                             >
                               <MessageCircle size={14} />
                               <span>Chat on WhatsApp</span>
                             </button>
                             <button
-                              className="dropdown-item delete-option"
+                              className="adm-dropdown-item adm-delete-option"
                               onClick={() =>
                                 handleDeleteAdmission(
                                   admission.id,
@@ -774,8 +791,8 @@ const AdmissionList = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="9" className="empty-row">
-                  <div className="empty-state">
+                <td colSpan="9" className="adm-empty-row">
+                  <div className="adm-empty-state">
                     <UserCheck size={48} />
                     <h3>No admissions found</h3>
                     <p>
@@ -793,25 +810,25 @@ const AdmissionList = () => {
 
       {/* Pagination */}
       {!loading && !error && pagination.totalPages > 1 && (
-        <div className="pagination">
-          <div className="pagination-info">
+        <div className="adm-pagination">
+          <div className="adm-pagination-info">
             Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
             {pagination.total} admissions
           </div>
-          <div className="pagination-controls">
+          <div className="adm-pagination-controls">
             <button
-              className="pagination-btn"
+              className="adm-pagination-btn"
               onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page === 1 || loading}
             >
               Previous
             </button>
-            <span className="pagination-page-info">
+            <span className="adm-pagination-page-info">
               Page {pagination.page} of {pagination.totalPages}
             </span>
             <button
-              className="pagination-btn"
+              className="adm-pagination-btn"
               onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages || loading}
             >
