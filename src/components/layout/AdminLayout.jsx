@@ -1,19 +1,16 @@
-// components/layout/AdminLayout.jsx
-import React from 'react';
-import { Outlet } from 'react-router-dom';
-import Sidebar from './Sidebar';
-import Navbar from './Navbar';
-import './AdminLayout.css';
+import { Outlet } from "react-router-dom";
+import Sidebar from "./Sidebar";
+import Navbar from "./Navbar"; // Changed from Header to Navbar
 
 const AdminLayout = () => {
   return (
-    <div className="admin-layout">
+    <div className="flex h-screen bg-gray-50">
       <Sidebar />
-      <div className="main-content">
-        <Navbar />
-        <div className="content-wrapper">
+      <div className="flex flex-col flex-1">
+        <Navbar /> {/* Changed from Header to Navbar */}
+        <main className="flex-1 p-6 overflow-auto">
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ const Login = () => {
     try {
       console.log("Attempting login with:", { email, password });
 
-      // ✅ USE CENTRALIZED API
+      // ✅ USE CENTRALIZED API (axios already imported in services/api)
       const response = await authAPI.login({ email, password });
 
       console.log("Login response:", response.data);
@@ -34,34 +34,21 @@ const Login = () => {
         navigate("/admin/dashboard");
       } else {
         setError(response.data.message || "Login failed");
+        setLoading(false);
       }
     } catch (err) {
       console.error("Login error:", err);
 
       if (err.response) {
         setError(err.response.data?.message || "Server error");
+      } else if (err.request) {
+        setError("No response from server. Check CORS or backend.");
       } else {
-        setError("No response from server. Backend may be sleeping.");
+        setError("Error: " + err.message);
       }
-    } finally {
       setLoading(false);
     }
   };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      {/* your JSX stays SAME */}
-    </form>
-  );
-
-
-
-  return (
-    <form onSubmit={handleSubmit}>
-      {/* your JSX stays SAME */}
-    </form>
-  );
-
 
   const handleGoogleSignIn = () => {
     setError("Google sign-in will be implemented soon");
@@ -79,7 +66,7 @@ const Login = () => {
             </p>
           </div>
 
-          {/* <div className="mb-8 w-full flex justify-center">
+          <div className="mb-8 w-full flex justify-center">
             <div className="w-72 h-72 rounded-xl overflow-hidden border-4 border-white shadow-lg">
               <img
                 src={iitImage}
@@ -87,7 +74,7 @@ const Login = () => {
                 className="w-full h-full object-cover"
               />
             </div>
-          </div> */}
+          </div>
 
           <div className="text-center space-y-4">
             <h2 className="text-2xl font-bold">Welcome to LMS!</h2>
@@ -152,7 +139,6 @@ const Login = () => {
                 placeholder="test@example.com"
                 required
                 disabled={loading}
-                defaultValue="test@example.com" // Pre-fill for testing
               />
             </div>
 
@@ -165,10 +151,9 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition mb-2"
-                placeholder="password123"
+                placeholder="Enter your password"
                 required
                 disabled={loading}
-                defaultValue="password123" // Pre-fill for testing
               />
               <div className="text-right">
                 <a
