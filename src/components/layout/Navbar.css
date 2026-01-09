@@ -1,0 +1,30 @@
+/* components/layout/Navbar.css */
+.navbar {
+  background: white;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.navbar-left h2 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 20px;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-profile {
+  background: #f1f5f9;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  color: #475569;
+}

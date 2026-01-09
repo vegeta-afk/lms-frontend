@@ -1,0 +1,255 @@
+/* =========================
+   SIDEBAR CONTAINER
+========================= */
+
+@charset "UTF-8";
+* {
+  box-sizing: border-box;
+}
+
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  overflow-y: auto;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.sidebar-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* =========================
+   NAV CONTAINER
+========================= */
+
+.sidebar-nav {
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item {
+  width: 100%;
+}
+
+/* =========================
+   MAIN NAV LINK
+========================= */
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.nav-link.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-left-color: #1d4ed8;
+}
+
+.nav-icon {
+  min-width: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-label {
+  white-space: nowrap;
+}
+
+/* =========================
+   DROPDOWN BUTTON
+========================= */
+
+.dropdown-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.dropdown-toggle:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+/* =========================
+   SUB MENU
+========================= */
+
+.sub-menu {
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+}
+
+/* =========================
+   SUB NAV LINK
+========================= */
+
+.sub-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  font-size: 13px;
+  text-decoration: none;
+  color: #64748b;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.sub-nav-link:hover {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.sub-nav-link.active {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.sub-nav-icon {
+  min-width: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* =========================
+   NESTED DROPDOWN (SETUP)
+========================= */
+
+.nested-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.nested-dropdown-toggle:hover {
+  background: #f8fafc;
+  color: #475569;
+}
+
+/* =========================
+   NESTED SUB MENU
+========================= */
+
+.nested-sub-menu {
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+  border-left: 2px solid #e5e7eb;
+}
+
+/* =========================
+   NESTED SUB LINK
+========================= */
+
+.nested-sub-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: #64748b;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.nested-sub-nav-link:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.nested-sub-nav-link.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.nested-sub-nav-icon {
+  min-width: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.nested-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #64748b;
+  width: 100%;
+  text-align: left;
+  justify-content: space-between; /* This is the key fix */
+}
+
+.nested-dropdown-toggle:hover {
+  background: #f8fafc;
+  color: #475569;
+}
+
+/* Make sure nested dropdown arrow is on the right */
+.nested-dropdown-toggle svg {
+  margin-left: auto;
+}
+
+/* Ensure proper indentation for nested items */
+.nested-sub-menu {
+  padding-left: 12px;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 20px; /* Add some margin for visual nesting */
+}
+
+/* Fix for Setup dropdown not showing arrow properly */
+.nested-dropdown-toggle .sub-nav-label {
+  flex-grow: 1;
+}
+
