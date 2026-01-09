@@ -1,44 +1,57 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// FIX: Use the environment variable that includes /api
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "https://lms-backend-u2ap.onrender.com/api";
 
 // Create axios instance
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 10000, // 10 second timeout
 });
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    console.log("API Request:", {
+      url: config.baseURL + config.url,
+      method: config.method,
+      data: config.data,
+      headers: config.headers,
+    });
     return config;
   },
   (error) => {
+    console.error("API Request Error:", error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log("API Response:", {
+      status: response.status,
+      data: response.data,
+      headers: response.headers,
+    });
+    return response;
+  },
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-    }
+    console.error("API Response Error:", {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
     return Promise.reject(error);
   }
 );
 
-// Auth API
+// Auth API - FIX: Remove /api prefix from routes since baseURL already has it
 export const authAPI = {
   login: (credentials) => api.post("/auth/login", credentials),
   register: (userData) => api.post("/auth/register", userData),
@@ -86,7 +99,7 @@ export const admissionAPI = {
   getAdmissionActivities: (id) => api.get(`/admissions/${id}/activities`),
 };
 
-// ✅ ADD COURSE API HERE
+// Course API
 export const courseAPI = {
   // CRUD Operations
   getCourses: (params) => api.get("/courses", { params }),
@@ -105,10 +118,10 @@ export const courseAPI = {
   getActiveCourses: () => api.get("/courses/active"),
 };
 
+// Setup API - FIX: Remove /api prefix from setup routes
 export const setupAPI = {
   // Get all setup data
   getAll: () => api.get("/setup"),
-
   getActiveData: () => api.get("/setup/active"),
 
   // Qualifications
@@ -147,6 +160,7 @@ export const setupAPI = {
   deleteFee: (id) => api.delete(`/setup/fees/${id}`),
 };
 
+// Faculty API
 export const facultyAPI = {
   // CRUD Operations
   getFaculty: (params) => api.get("/faculty", { params }),
@@ -161,5 +175,6 @@ export const facultyAPI = {
   // Dashboard
   getFacultyStats: () => api.get("/faculty/stats/dashboard"),
 };
+
 // Export the instance for custom requests
 export default api;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FaGoogle } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { authAPI } from "../../services/api";
 import iitImage from "../../assets/iit.png";
 
 const Login = () => {
@@ -12,10 +12,6 @@ const Login = () => {
   const [success, setSuccess] = useState("");
   const navigate = useNavigate();
 
-  // API URL - Make sure this matches your backend
-  const API_URL = import.meta.env.VITE_API_URL + "/api";
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -25,47 +21,47 @@ const Login = () => {
     try {
       console.log("Attempting login with:", { email, password });
 
-      // Make API call to backend
-      const response = await axios.post(`${API_URL}/auth/login`, {
-        email,
-        password,
-      });
+      // ✅ USE CENTRALIZED API
+      const response = await authAPI.login({ email, password });
 
       console.log("Login response:", response.data);
 
       if (response.data.success) {
-        // Store token and user data
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("user", JSON.stringify(response.data.user));
 
         setSuccess("Login successful!");
-        console.log("Login successful, navigating to dashboard...");
-
-        // Navigate immediately - DON'T call setLoading(false) after this
         navigate("/admin/dashboard");
-
-        // DO NOT add setLoading(false) here - the component will unmount
-        // setLoading(false); // ❌ REMOVE THIS IF YOU HAVE IT
       } else {
         setError(response.data.message || "Login failed");
-        setLoading(false); // ✅ This is correct - only on error
       }
     } catch (err) {
       console.error("Login error:", err);
 
       if (err.response) {
-        setError(
-          err.response.data?.message || `Server error: ${err.response.status}`
-        );
-      } else if (err.request) {
-        setError("No response from server. Check if backend is running.");
+        setError(err.response.data?.message || "Server error");
       } else {
-        setError(err.message || "An unexpected error occurred");
+        setError("No response from server. Backend may be sleeping.");
       }
-      setLoading(false); // ✅ This is correct - only on error
+    } finally {
+      setLoading(false);
     }
-    // ❌ DO NOT add setLoading(false) here either
   };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* your JSX stays SAME */}
+    </form>
+  );
+
+
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* your JSX stays SAME */}
+    </form>
+  );
+
 
   const handleGoogleSignIn = () => {
     setError("Google sign-in will be implemented soon");
